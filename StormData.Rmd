@@ -1,0 +1,73 @@
+---
+# 
+title: "Analysis of Storm Data impact to health and economy"
+---
+##
+Synopsis:
+"By analysing Storm Data between recorded 1950 and end in November 2011 we want to understand which events cause the most human injury and economy damage.   We are expecting to be able to identify the worst offending conditions to help prioritise resource accordingly"
+
+Data Processing:  
+Load the data to stormData
+```{r cachedChunk, cache=TRUE}
+#load data from csv
+stormDataRaw <- read.csv("data\\repdata-data-StormData.csv.bz2")
+#head(stormDataRaw)
+#colnames(stormDataRaw)
+
+```
+
+populate dataframe
+```{r}
+
+#set all event type to upper case
+stormDataRaw$EVTYPE= toupper(stormDataRaw$EVTYPE)
+
+#add the money multiplier property
+stormDataRaw$PROPDMGEXPMultiplier = 
+  ifelse(toupper(stormDataRaw$PROPDMGEXP)=="K",
+         3,
+         ifelse(toupper(stormDataRaw$PROPDMGEXP)=="M", 
+                6,
+                ifelse(toupper(stormDataRaw$PROPDMGEXP)=="B", 
+                       9, 
+                       0
+                       )
+                )
+         )
+
+#add the money multiplier for crop
+stormDataRaw$CROPDMGEXPMultiplier = 
+  ifelse(toupper(stormDataRaw$CROPDMGEXP)=="K",
+         3, 
+         ifelse(toupper(stormDataRaw$CROPDMGEXP)=="M", 
+                6, 
+                ifelse(toupper(stormDataRaw$CROPDMGEXP)=="B", 
+                       9, 
+                       0)
+                )
+         )
+
+
+#load plyr 
+library(plyr)
+#apply plyr to dataframe.  
+stormData<-ddply(stormDataRaw,.(EVTYPE),summarise,EconomicDamage=(sum( PROPDMG*10^ PROPDMGEXPMultiplier)+sum( CROPDMG*10 ^CROPDMGEXPMultiplier)), HumanDamage = (sum(FATALITIES)) + sum( INJURIES))
+
+#take top 1% of HumanDamage
+TopHumanDamage<- stormData[stormData$HumanDamage> quantile(stormData$HumanDamage, probs=0.99),]
+
+#take top 1% of EconomicDamage
+TopEconomicDamage<- stormData[stormData$EconomicDamage> quantile(stormData$EconomicDamage, probs=0.99), ]
+```
+
+Results:
+```{r}
+library(ggplot2)
+
+#plot of human damage showing Tornado being by far the most dangerous 
+ggplot(data=TopHumanDamage, aes(x=EVTYPE, y=HumanDamage)) +geom_bar(stat="identity") +xlab("Event Type") + ylab("Fatalities / Injurys")+ggtitle("Human damage by top 1% of events")+ theme(axis.text.x=element_text(angle=90))
+
+#plot of economic damage showing flood being the most costly
+ggplot(data=TopEconomicDamage, aes(x=EVTYPE, y=EconomicDamage/10^9)) +geom_bar(stat="identity") +xlab("Event Type") + ylab("Cost (billions)")+ggtitle("Economic damage by top 1% of events")+ theme(axis.text.x=element_text(angle=90))
+
+```
